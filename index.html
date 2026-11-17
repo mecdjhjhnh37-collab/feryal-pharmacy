@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>صيدلية فريال | الرستن</title>
+    <!-- تضمين مكتبة Firebase للربط السحابي اللحظي -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --accent: #f97316;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --card-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+
+        /* الوضع الليلي (Dark Mode) */
+        body.dark-mode {
+            --primary: #14b8a6;
+            --primary-dark: #0d9488;
+            --accent: #fb923c;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+            --card-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+        body { background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 40px; }
+        
+        /* الترويسة */
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white; text-align: center; padding: 28px 16px 36px;
+            border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
+            box-shadow: 0 4px 15px rgba(13, 148, 136, 0.2);
+            position: relative;
+        }
+        header h1 { font-size: 26px; margin-bottom: 2px; }
+        header p { font-size: 13px; opacity: 0.9; }
+
+        /* زر الوضع الليلي في أعلى الصفحة */
+        .dark-mode-btn {
+            position: absolute; top: 16px; left: 16px;
+            background: rgba(255, 255, 255, 0.2); border: none;
+            color: white; width: 36px; height: 36px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; cursor: pointer; backdrop-filter: blur(4px);
+        }
+
+        /* الحاوية الرئيسية */
+        main { max-width: 520px; margin: -18px auto 0; padding: 0 14px; }
+        
+        .card {
+            background: var(--card); border-radius: 18px; padding: 20px;
+            margin-bottom: 14px; box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+        }
+
+        /* شارة الحالة */
+        .status-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px; border-radius: 50px; font-size: 13px; font-weight: bold;
+        }
+        .status-open { background: #dcfce7; color: #15803d; }
+        .status-duty { background: #fef3c7; color: #b45309; }
+        .status-closed { background: #fee2e2; color: #b91c1c; }
+
+        body.dark-mode .status-open { background: rgba(21, 128, 61, 0.3); color: #4ade80; }
+        body.dark-mode .status-duty { background: rgba(180, 83, 9, 0.3); color: #fbbf24; }
+        body.dark-mode .status-closed { background: rgba(185, 28, 28, 0.3); color: #f87171; }
+
+        /* صفوف المعلومات */
+        .info-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+        }
+        .info-row:last-of-type { border-bottom: none; }
+        .icon-box {
+            width: 34px; height: 34px; background: rgba(13, 148, 136, 0.1); color: var(--primary);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center;
+            font-size: 16px; flex-shrink: 0;
+        }
+
+        /* صندوق التنويهات */
+        .notice-box {
+            background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-right: 4px solid #f59e0b;
+            padding: 12px; border-radius: 12px; margin-top: 12px; font-size: 13px; color: var(--text);
+        }
+
+        /* الأزرار الرئيسية */
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+        .btn {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 12px; border-radius: 12px; text-decoration: none;
+            font-weight: bold; font-size: 14px; transition: 0.2s; border: none; cursor: pointer;
+        }
+        .btn-shop { background: #0284c7; color: white; grid-column: span 2; font-size: 15px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25); }
+        .btn-whatsapp { background: #22c55e; color: white; grid-column: span 2; font-size: 14px; }
+        .btn-map { background: var(--primary); color: white; }
+        .btn-call { background: var(--border); color: var(--text); }
+
+        /* --- قسم التسوق على طراز Trendyol --- */
+        #shopSection { display: none; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .shop-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .product-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: var(--card-shadow);
+        }
+
+        .product-badge {
+            background: var(--border); color: var(--muted); font-size: 10px; padding: 2px 6px;
+            border-radius: 4px; align-self: flex-start; margin-bottom: 6px; font-weight: bold;
+        }
+
+        .product-title { font-size: 14px; font-weight: bold; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+        .product-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.2; }
+        
+        .product-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: auto;
+        }
+
+        .product-price {
+            font-size: 12px; font-weight: bold; color: var(--primary);
+            background: rgba(13, 148, 136, 0.1); padding: 3px 8px; border-radius: 6px; text-align: center;
+        }
+
+        .product-out {
+            font-size: 12px; font-weight: bold; color: #dc2626;
+            background: rgba(220, 38, 38, 0.1); padding: 3px 8px; border-radius: 6px; text-align: center;
+        }
+
+        .btn-trendyol-buy {
+            background: var(--accent); color: white; border: none; padding: 8px;
+            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+            text-align: center; text-decoration: none; display: block;
+        }
+        .btn-trendyol-buy.disabled {
+            background: var(--muted); opacity: 0.6; pointer-events: none;
+        }
+
+        footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <button class="dark-mode-btn" onclick="toggleDarkMode()" id="darkModeIcon" title="الوضع الليلي">🌙</button>
+    <h1>💊 صيدلية فريال</h1>
+    <p>بإشراف د. فريال • الرستن</p>
+</header>
+
+<main>
+    <!-- بطاقة الزبائن الرئيسية -->
+    <section class="card">
+        <div class="status-wrapper">
+            <div id="statusBadge" class="status-badge status-open">🟢 مفتوح الآن</div>
+            <span style="font-size: 11px; color: var(--muted);">صيدلية فريال</span>
+        </div>
+
+        <div class="info-row">
+            <div class="icon-box">📍</div>
+            <div>
+                <div style="font-size: 11px; color: var(--muted);">العنوان</div>
+                <strong id="addressText" style="font-size: 13px;">الرستن - الشارع العام - جانب المركز الثقافي</strong>
+            </div>
+        </div>
+
+        <div class="info-row">
+            <div class="icon-box">⏰</div>
+            <div>
+                <div style="font-size: 11px; color: var(--muted);">أوقات الدوام</div>
+                <strong id="hoursText" style="font-size: 13px;">9:00 صباحاً – 10:00 مساءً</strong>
+            </div>
+        </div>
+
+        <div class="info-row">
+            <div class="icon-box">📞</div>
+            <div>
+                <div style="font-size: 11px; color: var(--muted);">رقم الصيدلية</div>
+                <strong id="phoneText" dir="ltr" style="font-size: 13px;">+963 988 000 000</strong>
+            </div>
+        </div>
+
+        <!-- صندوق التنويهات -->
+        <div id="noticeContainer" class="notice-box" style="display:block;">
+            <strong>📢 تنويه من الصيدلية:</strong>
+            <p id="noticeText" style="margin-top:2px;">أهلاً بكم في صيدلية فريال. يتوفر لدينا خدمة توصيل الأدوية للحالات الخاصة.</p>
+        </div>
+
+        <!-- أزرار التفاعل -->
+        <div class="btn-grid">
+            <button onclick="toggleShop()" class="btn btn-shop">🛍️ قسم التسوق السريع (Trendyol Style)</button>
+            <a id="waBtn" href="https://wa.me/963988000000" target="_blank" class="btn btn-whatsapp">💬 اطلب دواءك أو أرسل الوصفة (واتساب)</a>
+            <a id="mapBtn" href="https://www.google.com/maps?q=34.927440,36.727176" target="_blank" class="btn btn-map">🗺️ الموقع على الخريطة</a>
+            <a id="callBtn" href="tel:+963988000000" class="btn btn-call">📞 اتصال مباشر</a>
+        </div>
+    </section>
+
+    <!-- قسم التسوق على طراز Trendyol -->
+    <section id="shopSection" class="card">
+        <div class="shop-header">
+            <h3 style="color: var(--accent); font-size: 16px;">🛍️ المنتجات والمستحضرات المتوفرة</h3>
+            <button onclick="toggleShop()" style="background:var(--border); color:var(--text); border:none; padding:4px 10px; border-radius:6px; font-size:11px; cursor:pointer;">إغلاق ✕</button>
+        </div>
+        <div id="productsGrid" class="products-grid">
+            <!-- يتم تعبئة المنتجات تلقائياً هنا -->
+        </div>
+    </section>
+
+    <footer>
+        <div>تصميم وتطوير: <strong>المصمم المخفي</strong></div>
+    </footer>
+</main>
+
+<script>
+    // إعدادات Firebase الخاصة بك (يمكن تعديلها أو ربطها بقناتك السحابية)
+    const firebaseConfig = {
+        databaseURL: "https://feryal-pharmacy-default-rtdb.firebaseio.com/"
+    };
+    
+    // تهيئة Firebase بأمان
+    let db = null;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+    } catch(e) {
+        console.log("Firebase offline mode fallback");
+    }
+
+    // تفعيل الوضع الليلي
+    function toggleDarkMode() {
+        document.body.classList.toggle("dark-mode");
+        const isDark = document.body.classList.contains("dark-mode");
+        localStorage.setItem("feryal_dark", isDark ? "1" : "0");
+        document.getElementById("darkModeIcon").textContent = isDark ? "☀️" : "🌙";
+    }
+
+    if (localStorage.getItem("feryal_dark") === "1") {
+        document.body.classList.add("dark-mode");
+        document.getElementById("darkModeIcon").textContent = "☀️";
+    }
+
+    // جلب البيانات وعرضها فوراً (سحابياً عبر Firebase أو محلياً عند عدم الاتصال)
+    const defaultData = {
+        status: "open",
+        address: "الرستن - الشارع العام - جانب المركز الثقافي",
+        hours: "9:00 صباحاً – 10:00 مساءً",
+        phone: "963988000000",
+        notice: "أهلاً بكم في صيدلية فريال. يتوفر لدينا خدمة توصيل الأدوية للحالات الخاصة."
+    };
+
+    const defaultProducts = {
+        "p1": { name: "سيتامول 500 ملغ", desc: "علبة 20 حبة مسكن", price: "متوفر", status: "available" },
+        "p2": { name: "فيتامين سي فوار", desc: "لتقوية المناعة", price: "متوفر", status: "available" },
+        "p3": { name: "كريم مرطب طبي", desc: "عناية يومية للبشرة", price: "متوفر", status: "available" }
+    };
+
+    function updateUI(saved, productsObj) {
+        document.getElementById("addressText").textContent = saved.address || defaultData.address;
+        document.getElementById("hoursText").textContent = saved.hours || defaultData.hours;
+        document.getElementById("phoneText").textContent = "+" + (saved.phone || defaultData.phone);
+        document.getElementById("callBtn").href = "tel:+" + (saved.phone || defaultData.phone);
+        document.getElementById("waBtn").href = `https://wa.me/${saved.phone || defaultData.phone}`;
+
+        const badge = document.getElementById("statusBadge");
+        badge.className = "status-badge";
+        const st = saved.status || "open";
+        if (st === "open") {
+            badge.classList.add("status-open");
+            badge.textContent = "🟢 مفتوح الآن";
+        } else if (st === "duty") {
+            badge.classList.add("status-duty");
+            badge.textContent = "🌙 مناوبة (24 ساعة)";
+        } else {
+            badge.classList.add("status-closed");
+            badge.textContent = "🔴 مغلق حالياً";
+        }
+
+        const noticeBox = document.getElementById("noticeContainer");
+        if (saved.notice && saved.notice.trim() !== "") {
+            noticeBox.style.display = "block";
+            document.getElementById("noticeText").textContent = saved.notice;
+        } else {
+            noticeBox.style.display = "none";
+        }
+
+        // تحويل قائمة المنتجات إلى مصفوفة لعرضها
+        const gridEl = document.getElementById("productsGrid");
+        gridEl.innerHTML = "";
+        
+        const productsArr = productsObj ? Object.values(productsObj) : Object.values(defaultProducts);
+
+        if (productsArr.length === 0) {
+            gridEl.style.gridTemplateColumns = "1fr";
+            gridEl.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:13px; padding:16px 0; grid-column:span 2;">لا توجد منتجات مضافة حالياً.</p>';
+        } else {
+            gridEl.style.gridTemplateColumns = "repeat(2, 1fr)";
+            productsArr.forEach(item => {
+                const isOut = item.status === "out";
+                const msg = encodeURIComponent(`مرحباً صيدلية فريال، أرغب بطلب المنتج: ${item.name}`);
+                gridEl.innerHTML += `
+                    <div class="product-card" style="${isOut ? 'opacity: 0.7;' : ''}">
+                        <div>
+                            <span class="product-badge">صيدلية فريال</span>
+                            <div class="product-title">${item.name}</div>
+                            ${item.desc ? `<div class="product-desc">${item.desc}</div>` : ''}
+                        </div>
+                        <div class="product-footer">
+                            ${isOut ? '<div class="product-out">❌ نفدت الكمية</div>' : `<div class="product-price">${item.price || 'متوفر'}</div>`}
+                            <a href="https://wa.me/${saved.phone || defaultData.phone}?text=${msg}" target="_blank" class="btn-trendyol-buy ${isOut ? 'disabled' : ''}">${isOut ? 'غير متوفر' : '🛒 اطلب الآن'}</a>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    }
+
+    // جدولة الاتصال السحابي اللحظي عبر Firebase
+    if (db) {
+        db.ref("pharmacy").on("value", snapshot => {
+            const data = snapshot.val() || {};
+            const savedInfo = data.info || defaultData;
+            const savedProducts = data.products || defaultProducts;
+            updateUI(savedInfo, savedProducts);
+            localStorage.setItem("feryal_info", JSON.stringify(savedInfo));
+            localStorage.setItem("feryal_products", JSON.stringify(savedProducts));
+        });
+    } else {
+        // الوضع المحلي احتياطياً
+        const savedInfo = JSON.parse(localStorage.getItem("feryal_info")) || defaultData;
+        const savedProducts = JSON.parse(localStorage.getItem("feryal_products")) || defaultProducts;
+        updateUI(savedInfo, savedProducts);
+    }
+
+    function toggleShop() {
+        const shop = document.getElementById("shopSection");
+        if (shop.style.display === "none" || shop.style.display === "") {
+            shop.style.display = "block";
+            shop.scrollIntoView({ behavior: "smooth" });
+        } else {
+            shop.style.display = "none";
+        }
+    }
+</script>
+
+</body>
+</html>
