@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>قسم التسوق والأدوية | صيدلية فريال</title>
+    <!-- تضمين مكتبة Firebase للربط السحابي اللحظي -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --accent: #f97316;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --card-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+
+        body.dark-mode {
+            --primary: #14b8a6;
+            --primary-dark: #0d9488;
+            --accent: #fb923c;
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --border: #334155;
+            --card-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; transition: background 0.2s, color 0.2s, border-color 0.2s; }
+        body { background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 40px; }
+        
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white; text-align: center; padding: 24px 16px 28px;
+            border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
+            box-shadow: 0 4px 15px rgba(13, 148, 136, 0.2);
+            position: relative;
+        }
+        header h1 { font-size: 22px; margin-bottom: 2px; }
+        header p { font-size: 12px; opacity: 0.9; }
+
+        .back-btn {
+            position: absolute; top: 16px; right: 16px;
+            background: rgba(255, 255, 255, 0.2); border: none;
+            color: white; padding: 6px 12px; border-radius: 8px;
+            font-size: 12px; font-weight: bold; cursor: pointer; text-decoration: none;
+            backdrop-filter: blur(4px);
+        }
+
+        main { max-width: 520px; margin: 16px auto 0; padding: 0 14px; }
+        
+        .card {
+            background: var(--card); border-radius: 18px; padding: 18px;
+            margin-bottom: 14px; box-shadow: var(--card-shadow);
+            border: 1px solid var(--border);
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .product-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: var(--card-shadow);
+        }
+
+        .product-badge {
+            background: var(--border); color: var(--muted); font-size: 10px; padding: 2px 6px;
+            border-radius: 4px; align-self: flex-start; margin-bottom: 6px; font-weight: bold;
+        }
+
+        .product-title { font-size: 14px; font-weight: bold; color: var(--text); margin-bottom: 4px; line-height: 1.3; }
+        .product-desc { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.2; }
+        
+        .product-footer {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: auto;
+        }
+
+        .product-price {
+            font-size: 12px; font-weight: bold; color: var(--primary);
+            background: rgba(13, 148, 136, 0.1); padding: 3px 8px; border-radius: 6px; text-align: center;
+        }
+
+        .product-out {
+            font-size: 12px; font-weight: bold; color: #dc2626;
+            background: rgba(220, 38, 38, 0.1); padding: 3px 8px; border-radius: 6px; text-align: center;
+        }
+
+        .btn-buy {
+            background: var(--accent); color: white; border: none; padding: 8px;
+            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer;
+            text-align: center; text-decoration: none; display: block;
+        }
+        .btn-buy.disabled {
+            background: var(--muted); opacity: 0.6; pointer-events: none;
+        }
+
+        footer { text-align: center; font-size: 12px; color: var(--muted); margin-top: 24px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <a href="index.html" class="back-btn">← الرئيسية</a>
+    <h1>🛒 قائمة الأدوية والمستحضرات</h1>
+    <p>صيدلية فريال • حجز واستلام من الصيدلية</p>
+</header>
+
+<main>
+    <section class="card">
+        <h3 style="font-size: 16px; margin-bottom: 12px; color: var(--primary-dark);">💊 الأدوية المتوفرة حالياً</h3>
+        <div id="productsGrid" class="products-grid">
+            <!-- يتم تعبئة المنتجات تلقائياً -->
+        </div>
+    </section>
+
+    <footer>
+        <div>تصميم وتطوير: <strong>المصمم المخفي</strong></div>
+    </footer>
+</main>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://feryal-pharmacy-default-rtdb.firebaseio.com/"
+    };
+    
+    let db = null;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+    } catch(e) {
+        console.log("Firebase offline mode fallback");
+    }
+
+    if (localStorage.getItem("feryal_dark") === "1") {
+        document.body.classList.add("dark-mode");
+    }
+
+    const defaultProducts = {
+        "p1": { name: "سيتامول 500 ملغ", desc: "علبة 20 حبة مسكن", price: "متوفر", status: "available" },
+        "p2": { name: "فيتامين سي فوار", desc: "لتقوية المناعة", price: "متوفر", status: "available" },
+        "p3": { name: "كريم مرطب طبي", desc: "عناية يومية للبشرة", price: "متوفر", status: "available" }
+    };
+
+    function renderShop(productsObj, phoneNum) {
+        const gridEl = document.getElementById("productsGrid");
+        gridEl.innerHTML = "";
+        const productsArr = productsObj ? Object.values(productsObj) : Object.values(defaultProducts);
+        const phone = phoneNum || "963988000000";
+
+        if (productsArr.length === 0) {
+            gridEl.style.gridTemplateColumns = "1fr";
+            gridEl.innerHTML = '<p style="text-align:center; color:var(--muted); font-size:13px; padding:16px 0; grid-column:span 2;">لا توجد منتجات مضافة حالياً.</p>';
+        } else {
+            gridEl.style.gridTemplateColumns = "repeat(2, 1fr)";
+            productsArr.forEach(item => {
+                const isOut = item.status === "out";
+                const msg = encodeURIComponent(`مرحباً صيدلية فريال، أرغب بحجز هذا الدواء لاستلامه من الصيدلية: ${item.name}`);
+                gridEl.innerHTML += `
+                    <div class="product-card" style="${isOut ? 'opacity: 0.7;' : ''}">
+                        <div>
+                            <span class="product-badge">صيدلية فريال</span>
+                            <div class="product-title">${item.name}</div>
+                            ${item.desc ? `<div class="product-desc">${item.desc}</div>` : ''}
+                        </div>
+                        <div class="product-footer">
+                            ${isOut ? '<div class="product-out">❌ نفدت الكمية</div>' : `<div class="product-price">${item.price || 'متوفر'}</div>`}
+                            <a href="https://wa.me/${phone}?text=${msg}" target="_blank" class="btn-buy ${isOut ? 'disabled' : ''}">${isOut ? 'غير متوفر' : '💬 حجز عبر واتساب'}</a>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+    }
+
+    if (db) {
+        db.ref("pharmacy").on("value", snapshot => {
+            const data = snapshot.val() || {};
+            const products = data.products || defaultProducts;
+            const phone = data.info ? data.info.phone : "963988000000";
+            renderShop(products, phone);
+            localStorage.setItem("feryal_products", JSON.stringify(products));
+        });
+    } else {
+        const products = JSON.parse(localStorage.getItem("feryal_products")) || defaultProducts;
+        const info = JSON.parse(localStorage.getItem("feryal_info")) || {};
+        renderShop(products, info.phone);
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم | صيدلية فريال</title>
+    <!-- تضمين مكتبة Firebase للتحكم السحابي اللحظي -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --primary: #0d9488;
+            --primary-dark: #0f766e;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #cbd5e1;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background: var(--bg); color: var(--text); line-height: 1.6; padding-bottom: 40px; }
+        
+        header {
+            background: #0f172a; color: white; text-align: center; padding: 24px 16px;
+            border-bottom-left-radius: 24px; border-bottom-right-radius: 24px;
+        }
+        header h1 { font-size: 22px; margin-bottom: 4px; }
+        header p { font-size: 13px; color: #94a3b8; }
+
+        main { max-width: 520px; margin: 16px auto 0; padding: 0 16px; }
+        
+        .card {
+            background: var(--card); border-radius: 18px; padding: 20px;
+            margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+        .card h2 { font-size: 17px; color: var(--primary-dark); margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
+
+        label { display: block; margin: 10px 0 5px; font-weight: bold; font-size: 13px; color: #334155; }
+        input, select, textarea {
+            width: 100%; padding: 11px; border: 1px solid var(--border);
+            border-radius: 10px; font-size: 14px; background: #f8fafc;
+        }
+        .btn {
+            width: 100%; padding: 13px; border: none; border-radius: 12px;
+            font-size: 15px; font-weight: bold; margin-top: 16px; cursor: pointer; color: white;
+        }
+        .btn-primary { background: var(--primary); }
+        .btn-blue { background: #0284c7; }
+        .btn-outline { background: white; color: var(--text); border: 1px solid var(--border); display: block; text-align: center; text-decoration: none; margin-top: 10px; }
+
+        .admin-product-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 12px; background: #f8fafc; border: 1px solid #e2e8f0;
+            border-radius: 10px; margin-top: 8px; gap: 8px;
+        }
+        .btn-status-toggle {
+            background: #e0f2fe; color: #0369a1; border: none; padding: 6px 10px;
+            border-radius: 8px; font-size: 11px; font-weight: bold; cursor: pointer; white-space: nowrap;
+        }
+        .btn-status-toggle.out {
+            background: #fee2e2; color: #dc2626;
+        }
+        .btn-delete {
+            background: #fee2e2; color: #dc2626; border: none; padding: 6px 10px;
+            border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap;
+        }
+
+        #loginScreen { max-width: 400px; margin: 60px auto; padding: 0 16px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>🔒 إدارة صيدلية فريال</h1>
+    <p>لوحة التحكم السحابية المباشرة</p>
+</header>
+
+<div id="loginScreen">
+    <div class="card" style="text-align: center;">
+        <h2 style="border:none;">تسجيل دخول الإدارة</h2>
+        <p style="font-size: 13px; color: var(--muted); margin-bottom: 14px;">أدخل رمز الدخول (الافتراضي: 1234)</p>
+        <input type="password" id="pinInput" placeholder="••••" style="text-align: center; font-size: 20px; letter-spacing: 4px;">
+        <button onclick="checkPin()" class="btn btn-primary">دخول</button>
+        <p id="loginError" style="color: #dc2626; font-size: 13px; margin-top: 10px;"></p>
+    </div>
+</div>
+
+<main id="adminPanel" style="display: none;">
+    
+    <section class="card">
+        <h2>⚙️ حالة الصيدلية والمعلومات</h2>
+        
+        <label>حالة الصيدلية الآن:</label>
+        <select id="editStatus">
+            <option value="open">🟢 مفتوح الآن</option>
+            <option value="duty">🌙 مناوبة اليوم (24 ساعة)</option>
+            <option value="closed">🔴 مغلق حالياً</option>
+        </select>
+
+        <label>العنوان:</label>
+        <input type="text" id="editAddress">
+
+        <label>أوقات الدوام:</label>
+        <input type="text" id="editHours">
+
+        <label>رقم الهاتف (مع رمز الدولة بدون +):</label>
+        <input type="text" id="editPhone">
+
+        <label>إعلان أو تنويه للزبائن:</label>
+        <textarea id="editNotice" rows="2"></textarea>
+
+        <button onclick="saveInfo()" class="btn btn-primary">💾 حفظ ونشر التحديثات فوراً</button>
+        <p id="infoMsg" style="color: #16a34a; font-weight: bold; text-align: center; margin-top: 8px; font-size: 13px;"></p>
+    </section>
+
+    <section class="card">
+        <h2>🛒 إضافة دواء أو منتج لقسم (التسوق)</h2>
+        
+        <label>اسم الدواء أو المستحضر:</label>
+        <input type="text" id="prodName" placeholder="مثال: بانادول إكسترا / فيتامين د">
+
+        <label>وصف مختصر:</label>
+        <input type="text" id="prodDesc" placeholder="مثال: علبة 24 حبة">
+
+        <label>السعر أو الحالة:</label>
+        <input type="text" id="prodPrice" placeholder="مثال: متوفر أو السعر حسب المبيع">
+
+        <button onclick="addProduct()" class="btn btn-blue">➕ إضافة إلى قائمة التسوق</button>
+        <p id="prodMsg" style="color: #16a34a; font-weight: bold; text-align: center; margin-top: 8px; font-size: 13px;"></p>
+
+        <div style="margin-top: 20px;">
+            <strong style="font-size: 14px; color: #334155;">الأدوية والتحكم بحالتها:</strong>
+            <div id="adminProductsList"></div>
+        </div>
+    </section>
+
+    <a href="index.html" class="btn btn-outline">👁️ معاينة صفحة الزبائن</a>
+</main>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://feryal-pharmacy-default-rtdb.firebaseio.com/"
+    };
+    
+    let db = null;
+    try {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.database();
+    } catch(e) {
+        console.log("Firebase offline mode fallback");
+    }
+
+    let globalData = { info: {}, products: {} };
+
+    function checkPin() {
+        const pin = document.getElementById("pinInput").value;
+        if (pin === "1234") {
+            document.getElementById("loginScreen").style.display = "none";
+            document.getElementById("adminPanel").style.display = "block";
+            fetchDataAndInit();
+        } else {
+            document.getElementById("loginError").textContent = "❌ رمز الدخول غير صحيح!";
+        }
+    }
+
+    function fetchDataAndInit() {
+        if (db) {
+            db.ref("pharmacy").once("value", snapshot => {
+                const data = snapshot.val();
+                if (data) {
+                    globalData = data;
+                }
+                fillAdminForm();
+            });
+        } else {
+            const savedInfo = JSON.parse(localStorage.getItem("feryal_info")) || {};
+            const savedProducts = JSON.parse(localStorage.getItem("feryal_products")) || {};
+            globalData.info = savedInfo;
+            globalData.products = savedProducts;
+            fillAdminForm();
+        }
+    }
+
+    function fillAdminForm() {
+        const info = globalData.info || {};
+        document.getElementById("editStatus").value = info.status || "open";
+        document.getElementById("editAddress").value = info.address || "الرستن - الشارع العام - جانب المركز الثقافي";
+        document.getElementById("editHours").value = info.hours || "9:00 صباحاً – 10:00 مساءً";
+        document.getElementById("editPhone").value = info.phone || "963988000000";
+        document.getElementById("editNotice").value = info.notice || "أهلاً بكم في صيدلية فريال. تواصل معنا للحجز واستلام الأدوية من الصيدلية مباشرة.";
+        renderAdminProducts();
+    }
+
+    function saveInfo() {
+        const info = {
+            status: document.getElementById("editStatus").value,
+            address: document.getElementById("editAddress").value,
+            hours: document.getElementById("editHours").value,
+            phone: document.getElementById("editPhone").value,
+            notice: document.getElementById("editNotice").value
+        };
+        globalData.info = info;
+        
+        if (db) {
+            db.ref("pharmacy/info").set(info);
+        }
+        localStorage.setItem("feryal_info", JSON.stringify(info));
+
+        const msg = document.getElementById("infoMsg");
+        msg.textContent = "✅ تم تحديث بيانات الصيدلية ونشرها سحابياً!";
+        setTimeout(() => msg.textContent = "", 2500);
+    }
+
+    function renderAdminProducts() {
+        const container = document.getElementById("adminProductsList");
+        container.innerHTML = "";
+        const products = globalData.products || {};
+        const keys = Object.keys(products);
+
+        if (keys.length === 0) {
+            container.innerHTML = '<p style="font-size:13px; color:#64748b; margin-top:8px;">لا توجد منتجات مضافة.</p>';
+            return;
+        }
+
+        keys.forEach(key => {
+            const p = products[key];
+            const isOut = p.status === "out";
+            container.innerHTML += `
+                <div class="admin-product-item">
+                    <div style="flex-grow: 1;">
+                        <strong style="font-size:13px;">${p.name}</strong>
+                        <div style="font-size:11px; color:#64748b;">${p.price || ''} ${p.desc ? '• ' + p.desc : ''}</div>
+                    </div>
+                    <button onclick="toggleProductStatus('${key}')" class="btn-status-toggle ${isOut ? 'out' : ''}">${isOut ? '❌ نفد (تفعيل)' : '🟢 متوفر (إلغاء)'}</button>
+                    <button onclick="deleteProduct('${key}')" class="btn-delete">حذف</button>
+                </div>
+            `;
+        });
+    }
+
+    function addProduct() {
+        const name = document.getElementById("prodName").value.trim();
+        const desc = document.getElementById("prodDesc").value.trim();
+        const price = document.getElementById("prodPrice").value.trim();
+
+        if (!name) {
+            alert("يرجى كتابة اسم الدواء أو المنتج أولاً!");
+            return;
+        }
+
+        const newId = "p_" + Date.now();
+        if (!globalData.products) globalData.products = {};
+        
+        globalData.products[newId] = {
+            name,
+            desc,
+            price: price || "متوفر",
+            status: "available"
+        };
+
+        if (db) {
+            db.ref("pharmacy/products").set(globalData.products);
+        }
+        localStorage.setItem("feryal_products", JSON.stringify(globalData.products));
+
+        document.getElementById("prodName").value = "";
+        document.getElementById("prodDesc").value = "";
+        document.getElementById("prodPrice").value = "";
+
+        renderAdminProducts();
+        const msg = document.getElementById("prodMsg");
+        msg.textContent = "✅ تمت إضافة المنتج ونشره سحابياً!";
+        setTimeout(() => msg.textContent = "", 2500);
+    }
+
+    function toggleProductStatus(key) {
+        if (!globalData.products[key]) return;
+        const currentStatus = globalData.products[key].status;
+        globalData.products[key].status = (currentStatus === "out") ? "available" : "out";
+
+        if (db) {
+            db.ref("pharmacy/products/" + key + "/status").set(globalData.products[key].status);
+        }
+        localStorage.setItem("feryal_products", JSON.stringify(globalData.products));
+        renderAdminProducts();
+    }
+
+    function deleteProduct(key) {
+        if (confirm("هل تريد حذف هذا المنتج نهائياً؟")) {
+            delete globalData.products[key];
+            if (db) {
+                db.ref("pharmacy/products/" + key).remove();
+            }
+            localStorage.setItem("feryal_products", JSON.stringify(globalData.products));
+            renderAdminProducts();
+        }
+    }
+</script>
+
+</body>
+</html>
